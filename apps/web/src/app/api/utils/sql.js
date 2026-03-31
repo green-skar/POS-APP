@@ -1,4 +1,4 @@
-import { db } from '../../../../lib/database.js';
+import { db } from '../../../../lib/database.ts';
 
 // SQLite query function that mimics the Neon API
 const sql = (query, params = []) => {

@@ -1,314 +1,315 @@
 'use client';
 
-import React, { useState } from 'react';
+import { apiFetch } from '@/utils/apiClient';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { useCurrencySettings } from '@/utils/currency';
 import { 
-  BarChart3, 
-  Package, 
   AlertTriangle, 
-  TrendingUp, 
-  DollarSign, 
-  ShoppingBag,
-  Users,
-  Calendar,
-  ArrowLeft
+  ChevronDown
 } from 'lucide-react';
-
+// Layout handles authentication and sidebar - no need to duplicate here
 export default function AdminDashboard() {
+  return <AdminDashboardContent />;
+}
+
+function AdminDashboardContent() {
+  const { formatMoney } = useCurrencySettings();
   const [selectedPeriod, setSelectedPeriod] = useState('today');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const periodOptions = [
+    { value: 'today', label: 'Today' },
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'week', label: 'This Week' },
+    { value: 'last7', label: 'Last 7 Days' },
+    { value: 'month', label: 'This Month' },
+    { value: 'last30', label: 'Last 30 Days' },
+    { value: 'year', label: 'This Year' },
+    { value: 'all', label: 'All Time' },
+  ];
+
+  const selectedLabel = periodOptions.find(opt => opt.value === selectedPeriod)?.label || 'Today';
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [saleItems, setSaleItems] = useState([]);
+  const [loadingSaleItems, setLoadingSaleItems] = useState(false);
 
   // Fetch dashboard statistics
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useQuery({
     queryKey: ['dashboard-stats', selectedPeriod],
     queryFn: async () => {
-      const response = await fetch(`/api/dashboard/stats?period=${selectedPeriod}`);
+      const response = await apiFetch(`/api/dashboard/stats?period=${selectedPeriod}`, {
+        credentials: 'include',
+      });
       if (!response.ok) {
-        throw new Error('Failed to fetch dashboard stats');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch dashboard stats' }));
+        throw new Error(errorData.error || 'Failed to fetch dashboard stats');
       }
       return response.json();
     },
+    retry: 1,
   });
 
   // Fetch stock alerts
-  const { data: alerts = [] } = useQuery({
+  const { data: alerts = [], error: alertsError } = useQuery({
     queryKey: ['alerts'],
     queryFn: async () => {
-      const response = await fetch('/api/alerts?unreadOnly=true');
+      const response = await apiFetch('/api/alerts?unreadOnly=true', {
+        credentials: 'include',
+      });
       if (!response.ok) {
-        throw new Error('Failed to fetch alerts');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch alerts' }));
+        throw new Error(errorData.error || 'Failed to fetch alerts');
       }
       return response.json();
     },
+    retry: 1,
   });
 
   // Fetch low stock products
-  const { data: lowStockProducts = [] } = useQuery({
+  const { data: lowStockProducts = [], error: lowStockError } = useQuery({
     queryKey: ['low-stock-products'],
     queryFn: async () => {
-      const response = await fetch('/api/products?lowStock=true');
+      const response = await apiFetch('/api/products?lowStock=true', {
+        credentials: 'include',
+      });
       if (!response.ok) {
-        throw new Error('Failed to fetch low stock products');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch low stock products' }));
+        throw new Error(errorData.error || 'Failed to fetch low stock products');
       }
       return response.json();
     },
+    retry: 1,
   });
 
-  if (isLoading) {
+
+  // Fetch sale items when a sale is selected
+  useEffect(() => {
+    if (selectedSale) {
+      setLoadingSaleItems(true);
+      apiFetch(`/api/sales/${selectedSale.id}`, {
+        credentials: 'include',
+      })
+        .then(res => {
+          if (!res.ok) {
+            throw new Error('Failed to fetch sale items');
+          }
+          return res.json();
+        })
+        .then(data => {
+          // Use the items array directly from the API
+          if (data.items && Array.isArray(data.items)) {
+            setSaleItems(data.items);
+          } else {
+            setSaleItems([]);
+          }
+        })
+        .catch(err => {
+          console.error('Error fetching sale items:', err);
+          setSaleItems([]);
+        })
+        .finally(() => setLoadingSaleItems(false));
+    }
+  }, [selectedSale]);
+
+  // Show loading state
+  if (statsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
+      <div className="px-6 sm:px-8 lg:px-10 py-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state with retry option
+  if (statsError) {
+    return (
+      <div className="px-6 sm:px-8 lg:px-10 py-6">
+        <div className="glass-card-pro p-6 text-center">
+          <p className="text-red-500 mb-4">Error loading dashboard: {statsError.message}</p>
+          <button 
+            onClick={() => refetchStats()} 
+            className="glass-button-primary px-4 py-2 rounded-lg"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="px-6 sm:px-8 lg:px-10 py-6">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <a href="/" className="p-2 text-gray-600 hover:text-gray-900">
-                <ArrowLeft size={20} />
-              </a>
-              <h1 className="text-xl font-semibold text-gray-900">Admin Dashboard</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          <div className="analytics-header text-2xl mb-7 flex justify-between items-center">
+            <span>Admin Dashboard</span>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="glass-button-secondary flex items-center justify-between gap-2 px-3 py-2 text-sm text-analytics-primary min-w-[180px]"
               >
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="year">This Year</option>
-              </select>
+                <span>{selectedLabel}</span>
+                <ChevronDown size={16} className={`transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 z-50 min-w-[180px]">
+                  <div className="glass-card-pro overflow-hidden shadow-lg">
+                    {periodOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => {
+                          setSelectedPeriod(option.value);
+                          setDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                          selectedPeriod === option.value
+                            ? 'bg-white/30 text-analytics-primary font-medium'
+                            : 'text-analytics-secondary hover:bg-white/20'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Total Sales */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Sales</p>
-                <p className="text-2xl font-bold text-gray-900">{stats?.sales?.total_sales || 0}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <ShoppingBag className="h-6 w-6 text-blue-600" />
-              </div>
+            <div className="glass-card-pro py-6 px-5 flex flex-col items-center bounce-in">
+              <span className="text-analytics-secondary text-xs mb-1">Total Sales</span>
+              <span className="text-3xl text-analytics-primary font-bold soft-shadow">{stats?.sales?.total_sales || 0}</span>
             </div>
+            <div className="glass-card-pro py-6 px-5 flex flex-col items-center bounce-in"><span className="text-analytics-secondary text-xs mb-1">Total Revenue</span><span className="text-3xl text-analytics-revenue font-bold soft-shadow">{formatMoney(parseFloat(stats?.sales?.total_revenue || 0))}</span></div>
+            <div className="glass-card-pro py-6 px-5 flex flex-col items-center bounce-in"><span className="text-analytics-secondary text-xs mb-1">Total Products</span><span className="text-3xl text-analytics-primary font-bold soft-shadow">{stats?.products?.total_products || 0}</span></div>
+            <div className="glass-card-pro py-6 px-5 flex flex-col items-center bounce-in"><span className="text-analytics-secondary text-xs mb-1">Low Stock Items</span><span className="text-3xl text-analytics-expense font-bold soft-shadow">{lowStockProducts.length || stats?.products?.low_stock_products || 0}</span></div>
           </div>
-
-          {/* Total Revenue */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  ${parseFloat(stats?.sales?.total_revenue || 0).toFixed(2)}
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <DollarSign className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* Total Products */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Products</p>
-                <p className="text-2xl font-bold text-gray-900">{stats?.products?.total_products || 0}</p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <Package className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-
-          {/* Low Stock Alerts */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Low Stock Items</p>
-                <p className="text-2xl font-bold text-gray-900">{stats?.products?.low_stock_products || 0}</p>
-              </div>
-              <div className="p-3 bg-orange-100 rounded-full">
-                <AlertTriangle className="h-6 w-6 text-orange-600" />
-              </div>
-            </div>
-          </div>
-        </div>
-
+          {/* Two column section (Top products, Recent Sales) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Top Selling Products */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Top Selling Products</h2>
+            <div className="glass-card-pro p-6">
+              <h2 className="text-lg font-semibold text-analytics-primary mb-4">Top Selling Products</h2>
             {stats?.top_products?.length > 0 ? (
+                <>
               <div className="space-y-3">
-                {stats.top_products.map((product, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                    <div>
-                      <h3 className="font-medium text-gray-900">{product.name}</h3>
-                      <p className="text-sm text-gray-600">Sold: {product.total_sold} units</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-green-600">
-                        ${parseFloat(product.total_revenue).toFixed(2)}
-                      </p>
-                      <p className="text-sm text-gray-600">${parseFloat(product.price).toFixed(2)} each</p>
-                    </div>
+                    {stats.top_products.slice(0, 6).map((product, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-center justify-between p-3 bg-white/30 rounded-md hover:bg-white/60 transition-colors"
+                      >
+                        <div>
+                          <h3 className="font-medium text-analytics-primary">{product.name}</h3>
+                          <p className="text-sm text-analytics-secondary">Sold: {product.total_sold} units</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-analytics-revenue">{formatMoney(parseFloat(product.total_revenue))}</p>
+                          <p className="text-sm text-analytics-secondary">{formatMoney(parseFloat(product.price))} each</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No sales data available</p>
-            )}
-          </div>
-
-          {/* Recent Sales */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Recent Sales</h2>
-            {stats?.recent_sales?.length > 0 ? (
-              <div className="space-y-3">
-                {stats.recent_sales.map((sale) => (
-                  <div key={sale.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                    <div>
-                      <p className="font-medium text-gray-900">Sale #{sale.id}</p>
-                      <p className="text-sm text-gray-600">
-                        {sale.item_count} items • {sale.payment_method}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(sale.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium text-green-600">
-                        ${parseFloat(sale.total_amount).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No recent sales</p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Stock Alerts */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-gray-900">Stock Alerts</h2>
-              <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-                {alerts.length} unread
-              </span>
+                  {stats.top_products.length > 6 && (
+                    <button onClick={() => setShowTopProductsModal(true)} className="mt-4 w-full text-primary-pos text-sm font-medium">Show More ({stats.top_products.length - 6} more)</button>
+                  )}
+                </>
+              ) : (
+                <p className="text-analytics-secondary text-center py-8">No sales data available</p>
+              )}
             </div>
-            {alerts.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {alerts.map((alert) => (
-                  <div key={alert.id} className="flex items-start space-x-3 p-3 bg-red-50 border border-red-200 rounded-md">
-                    <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="font-medium text-red-900">{alert.product_name}</p>
-                      <p className="text-sm text-red-700">
-                        {alert.alert_type === 'out_of_stock' 
-                          ? 'Out of stock' 
-                          : `Low stock: ${alert.stock_quantity} remaining (min: ${alert.min_stock_level})`
-                        }
-                      </p>
-                      <p className="text-xs text-red-600">
-                        {new Date(alert.created_at).toLocaleString()}
-                      </p>
-                    </div>
+            <div className="glass-card-pro p-6">
+              <h2 className="text-lg font-semibold text-analytics-primary mb-4">Recent Sales</h2>
+              {stats?.recent_sales?.length > 0 ? (
+                <>
+                  <div className="space-y-3">
+                    {stats.recent_sales.slice(0, 6).map((sale) => (
+                      <div key={sale.id} className="flex items-center justify-between p-3 bg-white/30 rounded-md hover:bg-white/60 cursor-pointer transition-colors" onClick={() => setSelectedSale(sale)}>
+                        <div>
+                          <p className="font-medium text-analytics-primary">Sale #{sale.id}</p>
+                          <p className="text-sm text-analytics-secondary">{sale.item_count} items • {sale.payment_method}</p>
+                          <p className="text-xs text-analytics-secondary">{new Date(sale.created_at).toLocaleString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-analytics-revenue">{formatMoney(parseFloat(sale.total_amount))}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                  {stats.recent_sales.length > 6 && (
+                    <Link to="/admin/sales" className="mt-4 w-full flex items-center justify-center text-primary-pos text-sm font-medium">Show More ({stats.recent_sales.length - 6} more)</Link>
+                  )}
+                </>
+              ) : (
+                <p className="text-analytics-secondary text-center py-8">No recent sales</p>
+              )}
+            </div>
+          </div>
+          {/* Alerts & Low Stock Products */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="glass-card-pro p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-analytics-primary">Stock Alerts</h2>
+                <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full">{alerts.length} unread</span>
               </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No stock alerts</p>
-            )}
+              {alerts.length > 0 ? (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {alerts.map((alert) => (
+                    <div key={alert.id} className="flex items-start space-x-3 p-3 bg-red-50/80 border border-red-200 rounded-md">
+                      <AlertTriangle className="h-5 w-5 text-analytics-loss mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-medium text-analytics-loss">{alert.product_name}</p>
+                        <p className="text-sm text-red-700">{alert.alert_type === 'out_of_stock' ? 'Out of stock' : `Low stock: ${alert.stock_quantity} remaining (min: ${alert.min_stock_level})`}</p>
+                        <p className="text-xs text-red-600">{new Date(alert.created_at).toLocaleString()}</p>
+            </div>
           </div>
-
-          {/* Low Stock Products */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Low Stock Products</h2>
-            {lowStockProducts.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {lowStockProducts.map((product) => (
-                  <div key={product.id} className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-md">
-                    <div>
-                      <h3 className="font-medium text-orange-900">{product.name}</h3>
-                      <p className="text-sm text-orange-700">{product.category}</p>
-                      <p className="text-xs text-orange-600">
-                        Min stock level: {product.min_stock_level}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-medium ${
-                        product.stock_quantity === 0 ? 'text-red-600' : 'text-orange-600'
-                      }`}>
-                        {product.stock_quantity} left
-                      </p>
-                      <p className="text-sm text-gray-600">${parseFloat(product.price).toFixed(2)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">All products are well stocked</p>
-            )}
-          </div>
+                  ))}
         </div>
-
-        {/* Quick Actions */}
-        <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <a
-              href="/admin/products"
-              className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors"
-            >
-              <Package size={20} className="text-gray-600" />
-              <span className="font-medium text-gray-900">Manage Products</span>
-            </a>
-            
-            <a
-              href="/admin/sales"
-              className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors"
-            >
-              <BarChart3 size={20} className="text-gray-600" />
-              <span className="font-medium text-gray-900">View Sales</span>
-            </a>
-            
-            <a
-              href="/admin/inventory"
-              className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors"
-            >
-              <TrendingUp size={20} className="text-gray-600" />
-              <span className="font-medium text-gray-900">Inventory Report</span>
-            </a>
-            
-            <a
-              href="/admin/alerts"
-              className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors"
-            >
-              <AlertTriangle size={20} className="text-gray-600" />
-              <span className="font-medium text-gray-900">Stock Alerts</span>
-            </a>
+              ) : (
+                <p className="text-analytics-secondary text-center py-8">No stock alerts</p>
+              )}
+            </div>
+            <div className="glass-card-pro p-6">
+              <h2 className="text-lg font-semibold text-analytics-expense mb-4">Low Stock Products</h2>
+              {lowStockProducts.length > 0 ? (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {lowStockProducts.map((product) => (
+                    <div key={product.id} className="flex items-center justify-between p-3 bg-orange-50/80 border border-orange-200 rounded-md">
+                <div>
+                        <h3 className="font-medium text-analytics-expense">{product.name}</h3>
+                        <p className="text-sm text-analytics-secondary">{product.category}</p>
+                        <p className="text-xs text-analytics-secondary">Min stock level: {product.min_stock_level}</p>
+                          </div>
+                          <div className="text-right">
+                        <p className={`font-medium ${product.stock_quantity === 0 ? 'text-analytics-loss' : 'text-analytics-expense'}`}>{product.stock_quantity} left</p>
+                        <p className="text-sm text-analytics-secondary">{formatMoney(parseFloat(product.price))}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                <p className="text-analytics-secondary text-center py-8">All products are well stocked</p>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
     </div>
   );
 }

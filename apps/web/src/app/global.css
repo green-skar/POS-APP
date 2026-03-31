@@ -6,4 +6,317 @@
   input, textarea, select, button {
     @apply outline-none focus:outline-none;
   }
+  
+  html {
+    background: transparent !important;
+    height: 100%;
+    /* Initialize glass effect CSS variables with defaults */
+    --glass-blur: 9.5px;
+    --glass-opacity: 0.18;
+    --glass-border-opacity: 0.3;
+    --button-glass-blur: 12px;
+    --button-glass-opacity: 0.25;
+    --button-glass-border-opacity: 0.4;
+  }
+  
+  body {
+    font-family: 'Inter', sans-serif;
+    position: relative;
+    min-height: 100vh;
+    background: transparent !important;
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+  
+  /* Background texture layer */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -2;
+    background-image: var(--bg-texture, none);
+    background-size: var(--bg-size, cover);
+    background-repeat: var(--bg-repeat, no-repeat);
+    background-position: var(--bg-position, center center);
+    background-color: transparent;
+    pointer-events: none;
+  }
+  
+  /* Background overlay layer */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    background: var(--bg-overlay, linear-gradient(120deg, rgba(209, 146, 91, 0.22) 0%, rgba(161, 117, 77, 0.20) 50%, rgba(118, 88, 61, 0.18) 100%));
+    pointer-events: none;
+  }
+  
+  /* Hide texture when no-texture class is present */
+  body.no-texture::before {
+    display: none !important;
+  }
+  
+  /* Custom Scrollbar Styles - Glassmorphism Theme */
+  /* Global scrollbar styles for all browsers */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
+  }
+  
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  
+  *::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 10px;
+  }
+  
+  *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: all 0.2s ease-in-out;
+  }
+  
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  
+  *::-webkit-scrollbar-thumb:active {
+    background: rgba(255, 255, 255, 0.6);
+  }
+  
+  *::-webkit-scrollbar-corner {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+  
+  /* Sidebar specific scrollbar - slightly different styling */
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 10px;
+  }
+  
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+  
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+  
+  /* Category dropdown scrollbar - thinner for smaller spaces */
+  .category-dropdown-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .category-dropdown-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 10px;
+  }
+  
+  .category-dropdown-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+  }
+  
+  .category-dropdown-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.45);
+  }
+}
+
+@layer components {
+  /* Glassmorphism button styles - using CSS variables */
+  .glass-button {
+    background: rgba(255, 255, 255, var(--button-glass-opacity, 0.25));
+    backdrop-filter: blur(var(--button-glass-blur, 12px));
+    -webkit-backdrop-filter: blur(var(--button-glass-blur, 12px));
+    border: 1px solid rgba(255, 255, 255, var(--button-glass-border-opacity, 0.4));
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transition: all 300ms ease-in-out;
+  }
+  
+  .glass-button:hover {
+    background: rgba(255, 255, 255, calc(var(--button-glass-opacity, 0.25) + 0.1));
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transform: scale(1.05);
+  }
+  
+  .glass-button:active {
+    transform: scale(0.95);
+  }
+  
+  .glass-button-primary {
+    @apply glass-button;
+    background: linear-gradient(135deg, rgba(12, 150, 156, var(--button-glass-opacity, 0.25)) 0%, rgba(107, 163, 190, var(--button-glass-opacity, 0.25)) 100%);
+    font-weight: 500;
+  }
+  
+  .glass-button-secondary {
+    @apply glass-button;
+    background: rgba(255, 255, 255, calc(var(--button-glass-opacity, 0.25) * 0.8));
+  }
+  
+  /* Glass card styles - using CSS variables */
+  .glass-card {
+    background: rgba(255, 255, 255, var(--glass-opacity, 0.18));
+    backdrop-filter: blur(var(--glass-blur, 9.5px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 9.5px));
+    border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity, 0.3));
+    border-radius: 1rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transition: all 300ms ease-in-out;
+  }
+  
+  .glass-card:hover {
+    background: rgba(255, 255, 255, calc(var(--glass-opacity, 0.18) + 0.1));
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+  
+  /* Glass card pro - enhanced version with stronger effect */
+  .glass-card-pro {
+    background: rgba(255, 255, 255, var(--glass-opacity, 0.18));
+    backdrop-filter: blur(var(--glass-blur, 9.5px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 9.5px));
+    border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity, 0.3));
+    border-radius: 1rem;
+    box-shadow: 0 8px 32px 0 rgba(16, 9, 7, 0.11), 0 2px 8px 0 rgba(0, 0, 0, 0.06);
+    transition: all 300ms ease-in-out;
+  }
+  
+  .glass-card-pro:hover {
+    background: rgba(255, 255, 255, calc(var(--glass-opacity, 0.18) + 0.05));
+    box-shadow: 0 12px 40px 0 rgba(16, 9, 7, 0.15), 0 4px 12px 0 rgba(0, 0, 0, 0.08);
+  }
+  
+  /* Glassmorphism input styles - using CSS variables */
+  .glass-input {
+    background: rgba(255, 255, 255, calc(var(--glass-opacity, 0.18) * 0.7));
+    backdrop-filter: blur(var(--glass-blur, 9.5px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 9.5px));
+    border: 1px solid rgba(255, 255, 255, var(--glass-border-opacity, 0.3));
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: all 300ms ease-in-out;
+  }
+  
+  .glass-input:focus {
+    background: rgba(255, 255, 255, calc(var(--glass-opacity, 0.18) * 1.2));
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    outline: none;
+  }
+  
+  .glass-input::placeholder {
+    color: rgb(107, 114, 128);
+  }
+  
+  /* Sidebar glass effect */
+  .sidebar-glass {
+    background: rgba(255, 255, 255, var(--glass-opacity, 0.18));
+    backdrop-filter: blur(var(--glass-blur, 9.5px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 9.5px));
+    border-right: 1px solid rgba(255, 255, 255, var(--glass-border-opacity, 0.3));
+  }
+  
+  /* POS-specific color classes */
+  .heading-pos {
+    color: var(--pos-text, var(--theme-primary, #1A1A1A));
+  }
+  
+  .text-primary-pos {
+    color: var(--pos-text, var(--theme-primary, #1A1A1A));
+  }
+  
+  .text-secondary-pos {
+    color: var(--pos-text-secondary, var(--theme-secondary, #4B4B4B));
+  }
+  
+  .text-price-pos {
+    color: var(--pos-text, var(--theme-primary, #1A1A1A));
+  }
+  
+  .text-stock-pos {
+    color: var(--theme-stock, #007ACC);
+  }
+  
+  .text-low-stock-pos {
+    color: var(--theme-warning, #D63C3C);
+  }
+  
+  .text-out-of-stock-pos {
+    color: var(--theme-loss, #D63C3C);
+  }
+  
+  .bg-pos-background {
+    background-color: var(--pos-background, var(--theme-posBackground, #F5F5F5));
+  }
+  
+  .bg-pos-card {
+    background-color: var(--pos-card, var(--theme-posCard, #FFFFFF));
+  }
+  
+  .border-pos-border {
+    border-color: var(--pos-border, var(--theme-posBorder, #E5E7EB));
+  }
+  
+  /* Teal gradient accents */
+  .teal-gradient {
+    background: linear-gradient(135deg, #0C969C 0%, #6BA3BE 50%, #0A7075 100%);
+  }
+  
+  .teal-gradient-light {
+    background: linear-gradient(135deg, rgba(12, 150, 156, 0.1) 0%, rgba(107, 163, 190, 0.1) 100%);
+  }
+  
+  /* Smooth transitions for all interactive elements */
+  .smooth-transition {
+    @apply transition-all duration-300 ease-in-out;
+  }
+  
+  /* Glowing effect for important elements */
+  .glow-effect {
+    @apply shadow-[0_0_15px_rgba(12,150,156,0.3)];
+  }
+  
+  /* Hover glow effect */
+  .hover-glow:hover {
+    @apply shadow-[0_0_25px_rgba(12,150,156,0.5)];
+  }
 }

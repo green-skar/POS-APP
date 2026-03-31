@@ -2,9 +2,67 @@ module.exports = {
 	content: ['./src/**/*.{js,ts,jsx,tsx}'],
 	theme: {
 		fontFamily: {
-			sans: ['Inter', 'sans-serif'],
+			sans: ['Poppins', 'Inter', 'sans-serif'],
 		},
 		extend: {
+			colors: {
+				// Teal palette from design
+				teal: {
+					50: '#f0fdfa',
+					100: '#ccfbf1',
+					200: '#99f6e4',
+					300: '#5eead4',
+					400: '#2dd4bf',
+					500: '#14b8a6',
+					600: '#0d9488',
+					700: '#0f766e',
+					800: '#115e59',
+					900: '#134e4a',
+					950: '#042f2e',
+				},
+				// Custom teal shades
+				darkTeal: {
+					50: '#274D60',
+					100: '#6BA3BE',
+					200: '#0C969C',
+					300: '#0A7075',
+					400: '#032F30',
+					500: '#031716',
+				},
+			// Steel Night palette
+			steelNight: {
+				light: '#88A2BF',
+				dark: '#141318',
+			},
+			// Analytics colors - mapped to CSS variables
+			analytics: {
+				primary: 'var(--theme-primary, #1A1A1A)',
+				secondary: 'var(--theme-secondary, #4B4B4B)',
+				revenue: 'var(--theme-revenue, #1DAA5D)',
+				expense: 'var(--theme-expense, #E66E19)',
+				profit: 'var(--theme-profit, #00996D)',
+				loss: 'var(--theme-loss, #D63C3C)',
+				warning: 'var(--theme-warning, #D63C3C)',
+				success: 'var(--theme-success, #10B981)',
+				info: 'var(--theme-info, #3B82F6)',
+				stock: 'var(--theme-stock, #007ACC)',
+				accent: 'var(--theme-accent, #8B5CF6)',
+			},
+			// POS colors - mapped to CSS variables
+			pos: {
+				background: 'var(--pos-background, var(--theme-posBackground, #F5F5F5))',
+				card: 'var(--pos-card, var(--theme-posCard, #FFFFFF))',
+				cart: 'var(--pos-cart, var(--theme-posCart, #FFFFFF))',
+				'product-card': 'var(--pos-product-card, var(--theme-posProductCard, #FFFFFF))',
+				button: 'var(--pos-button, var(--theme-posButton, #3B82F6))',
+				'button-hover': 'var(--pos-button-hover, var(--theme-posButtonHover, #2563EB))',
+				text: 'var(--pos-text, var(--theme-posText, #1A1A1A))',
+				'text-secondary': 'var(--pos-text-secondary, var(--theme-posTextSecondary, #6B7280))',
+				border: 'var(--pos-border, var(--theme-posBorder, #E5E7EB))',
+				active: 'var(--pos-active, var(--theme-posActive, #10B981))',
+				selected: 'var(--pos-selected, var(--theme-posSelected, #DBEAFE))',
+			},
+			},
 			fontFamily: {
 				'a-bee-zee': 'A Bee Zee',
 				'ad-la-m-display': 'Ad La M Display',

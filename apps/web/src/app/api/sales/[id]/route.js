@@ -5,30 +5,40 @@ export async function GET(request, { params }) {
   try {
     const { id } = params;
     
-    const saleResult = await sql`
+    // Get sale details with user info
+    const saleResult = await sql(`
       SELECT s.*, 
-             JSON_AGG(
-               JSON_BUILD_OBJECT(
-                 'id', si.id,
-                 'product_id', si.product_id,
-                 'product_name', p.name,
-                 'quantity', si.quantity,
-                 'unit_price', si.unit_price,
-                 'total_price', si.total_price
-               )
-             ) as items
+             u.username as created_by_username,
+             u.full_name as created_by_full_name
       FROM sales s
-      LEFT JOIN sale_items si ON s.id = si.sale_id
-      LEFT JOIN products p ON si.product_id = p.id
-      WHERE s.id = ${id}
-      GROUP BY s.id
-    `;
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.id = ?
+    `, [id]);
     
     if (saleResult.length === 0) {
       return Response.json({ error: 'Sale not found' }, { status: 404 });
     }
     
-    return Response.json(saleResult[0]);
+    // Get sale items with product or service names
+    const saleItems = await sql(`
+      SELECT 
+        si.*,
+        COALESCE(p.name, s.name) as item_name,
+        CASE WHEN si.product_id IS NOT NULL THEN 'product' ELSE 'service' END as item_type,
+        p.name as product_name,
+        s.name as service_name
+      FROM sale_items si
+      LEFT JOIN products p ON si.product_id = p.id
+      LEFT JOIN services s ON si.service_id = s.id
+      WHERE si.sale_id = ?
+      ORDER BY si.id
+    `, [id]);
+    
+    return Response.json({ 
+      ...saleResult[0], 
+      items: saleItems,
+      item_count: saleItems.length 
+    });
   } catch (error) {
     console.error('Error fetching sale:', error);
     return Response.json({ error: 'Failed to fetch sale' }, { status: 500 });

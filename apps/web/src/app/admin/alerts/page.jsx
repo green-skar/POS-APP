@@ -1,9 +1,11 @@
 'use client';
 
+import { apiFetch } from '@/utils/apiClient';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { 
-  ArrowLeft, 
   AlertTriangle, 
   CheckCircle, 
   Clock, 
@@ -12,46 +14,67 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
-
 export default function AlertsManagement() {
   const [showReadAlerts, setShowReadAlerts] = useState(false);
   const queryClient = useQueryClient();
+  
+  // Store read alerts in localStorage
+  const [readAlerts, setReadAlerts] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('readAlerts');
+      return stored ? JSON.parse(stored) : [];
+    }
+    return [];
+  });
 
   // Fetch alerts
   const { data: alerts = [], isLoading } = useQuery({
-    queryKey: ['alerts', showReadAlerts],
+    queryKey: ['alerts', showReadAlerts, readAlerts],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (!showReadAlerts) params.append('unreadOnly', 'true');
       
-      const response = await fetch(`/api/alerts?${params}`);
+      const response = await apiFetch(`/api/alerts?${params}`);
       if (!response.ok) {
         throw new Error('Failed to fetch alerts');
       }
-      return response.json();
+      const data = await response.json();
+      
+      // Mark alerts as read based on localStorage
+      return data.map(alert => ({
+        ...alert,
+        is_read: readAlerts.includes(`${alert.product_id}_${alert.alert_type}`)
+      }));
     },
   });
 
   // Mark alert as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (alertId) => {
-      const response = await fetch('/api/alerts', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alert_id: alertId }),
-      });
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to mark alert as read');
+      // Store in localStorage (alerts are dynamically generated, no API call needed)
+      if (typeof window !== 'undefined') {
+        const alert = alerts.find(a => a.id === alertId);
+        if (alert) {
+          const readKey = `${alert.product_id}_${alert.alert_type}`;
+          const newReadAlerts = [...readAlerts, readKey];
+          localStorage.setItem('readAlerts', JSON.stringify(newReadAlerts));
+          setReadAlerts(newReadAlerts);
+        }
       }
-      return response.json();
+      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      toast.success('Alert marked as read', {
+        description: 'The alert has been marked as read.',
+      });
     },
     onError: (error) => {
-      alert(error.message);
+      console.error('Error marking alert as read:', error);
+      toast.error('Failed to mark alert as read', {
+        description: error.message || 'An error occurred.',
+      });
     },
   });
 
@@ -96,83 +119,70 @@ export default function AlertsManagement() {
   const lowStockAlerts = alerts.filter(alert => alert.alert_type === 'low_stock');
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <a href="/admin" className="p-2 text-gray-600 hover:text-gray-900">
-                <ArrowLeft size={20} />
-              </a>
-              <h1 className="text-xl font-semibold text-gray-900">Stock Alerts</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => setShowReadAlerts(!showReadAlerts)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                  showReadAlerts 
-                    ? 'bg-gray-200 text-gray-700' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`}
-              >
-                {showReadAlerts ? <EyeOff size={16} /> : <Eye size={16} />}
-                <span>{showReadAlerts ? 'Hide Read Alerts' : 'Show All Alerts'}</span>
-              </button>
-            </div>
+    <div className="px-4 py-7">
+        {/* Header */}
+        <div className="analytics-header text-2xl mb-7 flex justify-between items-center">
+          <span>Stock Alerts</span>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setShowReadAlerts(!showReadAlerts)}
+              className={`glass-button-primary text-white font-semibold flex items-center gap-1.5 py-1 px-3 text-sm`}
+            >
+              {showReadAlerts ? <EyeOff size={16} /> : <Eye size={16} />}
+              <span>{showReadAlerts ? 'Hide Read Alerts' : 'Show All Alerts'}</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div>
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="glass-card-pro p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Unread Alerts</p>
-                <p className="text-2xl font-bold text-gray-900">{unreadAlerts.length}</p>
+                <p className="text-xs font-medium text-analytics-secondary">Unread Alerts</p>
+                <p className="text-3xl font-bold text-analytics-primary soft-shadow">{unreadAlerts.length}</p>
               </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <Clock className="h-6 w-6 text-blue-600" />
+              <div className="p-3 bg-white/20 rounded-full">
+                <Clock className="h-6 w-6 text-analytics-stock" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="glass-card-pro p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Out of Stock</p>
-                <p className="text-2xl font-bold text-gray-900">{outOfStockAlerts.length}</p>
+                <p className="text-xs font-medium text-analytics-secondary">Out of Stock</p>
+                <p className="text-3xl font-bold text-analytics-loss soft-shadow">{outOfStockAlerts.length}</p>
               </div>
-              <div className="p-3 bg-red-100 rounded-full">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+              <div className="p-3 bg-white/20 rounded-full">
+                <AlertTriangle className="h-6 w-6 text-analytics-loss" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="glass-card-pro p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Low Stock</p>
-                <p className="text-2xl font-bold text-gray-900">{lowStockAlerts.length}</p>
+                <p className="text-xs font-medium text-analytics-secondary">Low Stock</p>
+                <p className="text-3xl font-bold text-analytics-expense soft-shadow">{lowStockAlerts.length}</p>
               </div>
-              <div className="p-3 bg-orange-100 rounded-full">
-                <AlertTriangle className="h-6 w-6 text-orange-600" />
+              <div className="p-3 bg-white/20 rounded-full">
+                <AlertTriangle className="h-6 w-6 text-analytics-expense" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Alerts List */}
-        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
+        <div className="glass-card-pro overflow-hidden">
+          <div className="px-6 py-4 border-b border-white/10">
             <div className="flex justify-between items-center">
-              <h2 className="text-lg font-medium text-gray-900">
+              <h2 className="text-lg font-semibold text-analytics-primary">
                 {showReadAlerts ? 'All Alerts' : 'Unread Alerts'} ({alerts.length})
               </h2>
               {!showReadAlerts && unreadAlerts.length > 0 && (
-                <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                <span className="bg-red-100/60 text-analytics-loss text-xs font-medium px-2.5 py-0.5 rounded-full">
                   {unreadAlerts.length} unread
                 </span>
               )}
@@ -180,25 +190,23 @@ export default function AlertsManagement() {
           </div>
           
           {isLoading ? (
-            <div className="text-center py-8">Loading alerts...</div>
+            <div className="text-center py-8 text-analytics-secondary">Loading alerts...</div>
           ) : alerts.length === 0 ? (
             <div className="text-center py-8">
-              <AlertTriangle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <p className="text-gray-500">
+              <AlertTriangle className="mx-auto h-12 w-12 text-analytics-secondary mb-4" />
+              <p className="text-analytics-secondary">
                 {showReadAlerts ? 'No alerts found' : 'No unread alerts'}
               </p>
-              <p className="text-sm text-gray-400 mt-1">
+              <p className="text-sm text-analytics-secondary mt-1">
                 {showReadAlerts ? 'All your stock levels are healthy!' : 'Great! All alerts have been addressed.'}
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-white/10">
               {alerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className={`p-6 transition-colors ${
-                    alert.is_read ? 'bg-gray-50' : getAlertColor(alert.alert_type)
-                  }`}
+                  className={`p-6 transition-colors hover:bg-white/20`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-4">
@@ -208,29 +216,29 @@ export default function AlertsManagement() {
                       
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <h3 className="text-sm font-medium text-gray-900">
+                          <h3 className="text-sm font-semibold text-analytics-primary">
                             {alert.product_name}
                           </h3>
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             alert.alert_type === 'out_of_stock' 
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-orange-100 text-orange-800'
+                              ? 'bg-red-100/60 text-analytics-loss'
+                              : 'bg-orange-100/60 text-analytics-expense'
                           }`}>
                             {alert.alert_type === 'out_of_stock' ? 'Out of Stock' : 'Low Stock'}
                           </span>
                           {alert.is_read && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/30 text-analytics-secondary">
                               <CheckCircle size={12} className="mr-1" />
                               Read
                             </span>
                           )}
                         </div>
                         
-                        <p className="text-sm text-gray-700 mb-2">
+                        <p className="text-sm text-analytics-secondary mb-2">
                           {getAlertMessage(alert)}
                         </p>
                         
-                        <div className="flex items-center space-x-4 text-xs text-gray-500">
+                        <div className="flex items-center space-x-4 text-xs text-analytics-secondary">
                           <span>Current stock: {alert.stock_quantity}</span>
                           <span>Minimum level: {alert.min_stock_level}</span>
                           <span>{new Date(alert.created_at).toLocaleString()}</span>
@@ -243,20 +251,20 @@ export default function AlertsManagement() {
                         <button
                           onClick={() => handleMarkAsRead(alert.id)}
                           disabled={markAsReadMutation.isLoading}
-                          className="flex items-center space-x-1 px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                          className="glass-button-primary text-white text-[10px] sm:text-xs px-1 py-0.5 disabled:opacity-50 leading-tight"
                         >
-                          <CheckCircle size={14} />
+                          <CheckCircle size={12} />
                           <span>Mark as Read</span>
                         </button>
                       )}
                       
-                      <a
-                        href="/admin/products"
-                        className="flex items-center space-x-1 px-3 py-1 text-sm bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+                      <Link
+                        to="/admin/products"
+                        className="glass-card-pro text-[10px] sm:text-xs px-1 py-0.5 leading-tight"
                       >
-                        <Package size={14} />
+                        <Package size={12} />
                         <span>Manage Product</span>
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -267,32 +275,21 @@ export default function AlertsManagement() {
 
         {/* Quick Actions */}
         {alerts.length > 0 && (
-          <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
+          <div className="mt-8 glass-card-pro p-6">
+            <h2 className="text-lg font-semibold text-analytics-primary mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <a
-                href="/admin/products"
-                className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <Package size={20} className="text-gray-600" />
-                <span className="font-medium text-gray-900">Manage Products</span>
-              </a>
-              
-              <a
-                href="/admin/inventory"
-                className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <AlertTriangle size={20} className="text-gray-600" />
-                <span className="font-medium text-gray-900">View Inventory Report</span>
-              </a>
-              
-              <a
-                href="/admin"
-                className="flex items-center justify-center space-x-2 p-4 border border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <CheckCircle size={20} className="text-gray-600" />
-                <span className="font-medium text-gray-900">Back to Dashboard</span>
-              </a>
+              <Link to="/admin/products" className="glass-card-pro flex items-center justify-center space-x-2 p-4">
+                <Package size={20} className="text-analytics-secondary" />
+                <span className="font-medium text-analytics-primary">Manage Products</span>
+              </Link>
+              <Link to="/admin/inventory" className="glass-card-pro flex items-center justify-center space-x-2 p-4">
+                <AlertTriangle size={20} className="text-analytics-expense" />
+                <span className="font-medium text-analytics-primary">View Inventory Report</span>
+              </Link>
+              <Link to="/admin" className="glass-card-pro flex items-center justify-center space-x-2 p-4">
+                <CheckCircle size={20} className="text-analytics-stock" />
+                <span className="font-medium text-analytics-primary">Back to Dashboard</span>
+              </Link>
             </div>
           </div>
         )}

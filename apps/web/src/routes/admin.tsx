@@ -1,3 +1,4 @@
+import { apiFetch } from '@/utils/apiClient';
 import { useState, useEffect } from 'react';
 import {
   Box,
@@ -71,7 +72,7 @@ export default function Admin() {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/products');
+      const response = await apiFetch('/api/products');
       const data = await response.json();
       setProducts(data);
     } catch (error) {
@@ -94,7 +95,7 @@ export default function Admin() {
       const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
       const method = editingProduct ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +146,7 @@ export default function Admin() {
   const handleDelete = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this product?')) {
       try {
-        const response = await fetch(`/api/products/${id}`, {
+        const response = await apiFetch(`/api/products/${id}`, {
           method: 'DELETE',
         });
 

@@ -1,9 +1,10 @@
+import { apiFetch } from '@/utils/apiClient';
 const create = {
 	db: (database) => ({
 		from: (table) => {
 			return {
 				getById: async (id) => {
-					const response = await fetch(`/api/db/${database}`, {
+					const response = await apiFetch(`/api/db/${database}`, {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({

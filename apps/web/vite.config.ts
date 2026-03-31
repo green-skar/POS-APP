@@ -16,6 +16,12 @@ import { restartEnvFileChange } from './plugins/restartEnvFileChange';
 export default defineConfig({
   // Keep them available via import.meta.env.NEXT_PUBLIC_*
   envPrefix: 'NEXT_PUBLIC_',
+  build: {
+    target: 'es2022',
+  },
+  esbuild: {
+    target: 'es2022',
+  },
   optimizeDeps: {
     // Explicitly include fast-glob, since it gets dynamically imported and we
     // don't want that to cause a re-bundle.
@@ -82,6 +88,12 @@ export default defineConfig({
     allowedHosts: true,
     host: '0.0.0.0',
     port: 4000,
+    watch: {
+      // Windows can hit EMFILE in large projects; polling avoids FD exhaustion.
+      usePolling: true,
+      interval: 1000,
+      ignored: ['**/node_modules/**', '**/.git/**', '**/target/**', '**/dist/**'],
+    },
     hmr: {
       overlay: false,
     },

@@ -54,7 +54,7 @@ function buildRouteTree(dir: string, basePath = ''): Tree {
 			node.children.push(childNode);
 		} else if (file === 'page.jsx') {
 			node.hasPage = true;
-    }
+		}
 	}
 
 	return node;
