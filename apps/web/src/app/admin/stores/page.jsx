@@ -14,6 +14,7 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import { logButtonClick } from '@/utils/logActivity';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { usePasswordConfirmation } from '@/utils/usePasswordConfirmation';
+import { useTimezoneSettings } from '@/utils/timezone';
 
 export default function StoresPage() {
   return (
@@ -24,6 +25,7 @@ export default function StoresPage() {
 }
 
 function StoresPageContent() {
+  const { formatDate } = useTimezoneSettings();
   const { isSuperAdmin } = useAuth();
   const queryClient = useQueryClient();
   // Sidebar state is now managed by AdminLayout
@@ -569,7 +571,7 @@ function StoresPageContent() {
                           <div>
                             <p className="text-xs text-analytics-secondary mb-1">Created</p>
                             <p className="text-sm text-analytics-primary">
-                              {new Date(storeDetailsData.store.created_at).toLocaleDateString()}
+                              {formatDate(storeDetailsData.store.created_at)}
                             </p>
                           </div>
                         </div>
@@ -981,14 +983,14 @@ function StoresPageContent() {
                                     <div>
                                       <p className="text-xs text-analytics-secondary mb-0.5">Hire Date</p>
                                       <p className="text-sm text-analytics-primary">
-                                        {new Date(employee.hire_date).toLocaleDateString()}
+                                        {formatDate(employee.hire_date)}
                                       </p>
                                     </div>
                                   )}
                                   <div>
                                     <p className="text-xs text-analytics-secondary mb-0.5">Joined</p>
                                     <p className="text-sm text-analytics-primary">
-                                      {new Date(employee.created_at).toLocaleDateString()}
+                                      {formatDate(employee.created_at)}
                                     </p>
                                   </div>
                                 </div>

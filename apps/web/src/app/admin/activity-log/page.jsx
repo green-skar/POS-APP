@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import { usePasswordConfirmation } from '@/utils/usePasswordConfirmation';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { useTimezoneSettings } from '@/utils/timezone';
 
 export default function ActivityLogPage() {
+  const { formatDateTime } = useTimezoneSettings();
   // Password confirmation hook
   const {
     showPasswordModal,
@@ -375,7 +377,7 @@ export default function ActivityLogPage() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className="text-sm text-analytics-secondary">
-                            {new Date(item.performed_at).toLocaleString()}
+                            {formatDateTime(item.performed_at)}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">

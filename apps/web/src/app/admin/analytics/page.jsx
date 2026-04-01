@@ -21,6 +21,7 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 import { usePasswordConfirmation } from '@/utils/usePasswordConfirmation';
 import { saveFile } from '@/utils/saveFile';
 import { useCurrencySettings } from '@/utils/currency';
+import { useTimezoneSettings } from '@/utils/timezone';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 // --- Utility & stub data ---
@@ -30,6 +31,7 @@ const itemImgPlaceholder = '/placeholder-prod.png';
 
 export default function AnalyticsPro() {
   const { formatMoney } = useCurrencySettings();
+  const { formatCustom } = useTimezoneSettings();
   // Password confirmation hook
   const {
     showPasswordModal,
@@ -960,7 +962,7 @@ ${trends.length > 0 ? `- Sales Trend: ${trends.length} data points available` : 
     const expenses = Number(t.expenses) || 0;
     return {
       name: t.date
-        ? new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        ? formatCustom(t.date, { month: 'short', day: 'numeric' })
         : '',
       revenue,
       expenses,

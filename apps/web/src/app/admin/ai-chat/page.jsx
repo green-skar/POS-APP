@@ -16,9 +16,11 @@ import {
   Trash2,
   History
 } from 'lucide-react';
+import { useTimezoneSettings } from '@/utils/timezone';
 // Sidebar is now in admin layout - no need to import here
 
 export default function AIChat() {
+  const { formatDateTime } = useTimezoneSettings();
   // Sidebar state is now managed by AdminLayout
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -51,7 +53,7 @@ export default function AIChat() {
     const chatId = Date.now();
     const chatToSave = {
       id: chatId,
-      title: `Chat ${new Date().toLocaleString()}`,
+      title: `Chat ${formatDateTime(new Date())}`,
       messages: messages,
       timestamp: new Date().toISOString()
     };

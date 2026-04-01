@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useCurrencySettings } from '@/utils/currency';
+import { useTimezoneSettings } from '@/utils/timezone';
 import { 
   AlertTriangle, 
   ChevronDown
@@ -16,6 +17,7 @@ export default function AdminDashboard() {
 
 function AdminDashboardContent() {
   const { formatMoney } = useCurrencySettings();
+  const { formatDateTime } = useTimezoneSettings();
   const [selectedPeriod, setSelectedPeriod] = useState('today');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -246,7 +248,7 @@ function AdminDashboardContent() {
                         <div>
                           <p className="font-medium text-analytics-primary">Sale #{sale.id}</p>
                           <p className="text-sm text-analytics-secondary">{sale.item_count} items • {sale.payment_method}</p>
-                          <p className="text-xs text-analytics-secondary">{new Date(sale.created_at).toLocaleString()}</p>
+                          <p className="text-xs text-analytics-secondary">{formatDateTime(sale.created_at)}</p>
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-analytics-revenue">{formatMoney(parseFloat(sale.total_amount))}</p>
@@ -278,7 +280,7 @@ function AdminDashboardContent() {
                       <div className="flex-1">
                         <p className="font-medium text-analytics-loss">{alert.product_name}</p>
                         <p className="text-sm text-red-700">{alert.alert_type === 'out_of_stock' ? 'Out of stock' : `Low stock: ${alert.stock_quantity} remaining (min: ${alert.min_stock_level})`}</p>
-                        <p className="text-xs text-red-600">{new Date(alert.created_at).toLocaleString()}</p>
+                        <p className="text-xs text-red-600">{formatDateTime(alert.created_at)}</p>
             </div>
           </div>
                   ))}

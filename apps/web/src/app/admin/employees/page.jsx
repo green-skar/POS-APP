@@ -14,6 +14,7 @@ import { logButtonClick } from '@/utils/logActivity';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { usePasswordConfirmation } from '@/utils/usePasswordConfirmation';
 import { saveFile } from '@/utils/saveFile';
+import { useTimezoneSettings } from '@/utils/timezone';
 
 export default function EmployeesPage() {
   return (
@@ -24,6 +25,7 @@ export default function EmployeesPage() {
 }
 
 function EmployeesPageContent() {
+  const { formatDate: formatDateInTz } = useTimezoneSettings();
   const { user: authUser, isAdmin, isSuperAdmin, store } = useAuth();
   const queryClient = useQueryClient();
 
@@ -960,9 +962,9 @@ function EmployeesPageContent() {
       'Store(s)': emp.store_names || '',
       'Salary': emp.salary ? `$${parseFloat(emp.salary).toFixed(2)}` : '$0.00',
       'Work Shift': formatWorkShiftDisplay(emp.work_shift) || 'N/A',
-      'Hire Date': emp.hire_date ? new Date(emp.hire_date).toLocaleDateString() : 'N/A',
+      'Hire Date': emp.hire_date ? formatDateInTz(new Date(emp.hire_date)) : 'N/A',
       'Status': emp.is_active ? 'Active' : 'Inactive',
-      'Created At': emp.created_at ? new Date(emp.created_at).toLocaleDateString() : 'N/A'
+      'Created At': emp.created_at ? formatDateInTz(new Date(emp.created_at)) : 'N/A'
     }));
 
     if (exportFormat === 'csv') {
@@ -993,7 +995,7 @@ function EmployeesPageContent() {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
+    return formatDateInTz(new Date(dateString));
   };
 
   // Format work shift for display

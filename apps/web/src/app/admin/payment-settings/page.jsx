@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '@/utils/apiClient';
 import { toast } from 'sonner';
 import { CreditCard, Smartphone, Save, Loader2, Info, PlugZap, Play, Power } from 'lucide-react';
@@ -41,6 +41,13 @@ const emptyNgrok = {
 const emptyCurrency = {
   code: 'USD',
   locale: 'en-US',
+};
+const emptyTimezone = {
+  mode: 'auto',
+  value: '',
+  effective: '',
+  detected: '',
+  dateTimeLocale: 'en-US',
 };
 
 const CURRENCY_OPTIONS = [
@@ -84,10 +91,45 @@ function PaymentSettingsContent() {
   const [card, setCard] = useState(emptyCard);
   const [ngrok, setNgrok] = useState(emptyNgrok);
   const [currency, setCurrency] = useState(emptyCurrency);
+  const [timezone, setTimezone] = useState(emptyTimezone);
+  const [dateTimeLocale, setDateTimeLocale] = useState('en-US');
   const [ngrokStatus, setNgrokStatus] = useState(null);
   const [ngrokToken, setNgrokToken] = useState('');
   const [ngrokBusy, setNgrokBusy] = useState(false);
   const [isDesktop] = useState(() => isTauriDesktop());
+  const detectedTimezone = (() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    } catch {
+      return 'UTC';
+    }
+  })();
+  const timezoneOptions = useMemo(() => {
+    try {
+      if (typeof Intl.supportedValuesOf === 'function') {
+        return Intl.supportedValuesOf('timeZone');
+      }
+    } catch {
+      /* ignore */
+    }
+    return [
+      'UTC',
+      'Africa/Nairobi',
+      'Africa/Lagos',
+      'Africa/Kampala',
+      'Africa/Dar_es_Salaam',
+      'Europe/London',
+      'Europe/Paris',
+      'Asia/Dubai',
+      'Asia/Kolkata',
+      'Asia/Shanghai',
+      'America/New_York',
+      'America/Chicago',
+      'America/Denver',
+      'America/Los_Angeles',
+      'Australia/Sydney',
+    ];
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,6 +141,8 @@ function PaymentSettingsContent() {
       setCard({ ...emptyCard, ...data.card });
       setNgrok({ ...emptyNgrok, ...data.ngrok });
       setCurrency({ ...emptyCurrency, ...data.currency });
+      setTimezone({ ...emptyTimezone, ...data.timezone });
+      setDateTimeLocale(String(data?.timezone?.dateTimeLocale || data?.dateTimeLocale || 'en-US'));
       saveNgrokAutoConfig({ ...emptyNgrok, ...data.ngrok });
     } catch {
       toast.error('Could not load payment settings');
@@ -153,7 +197,7 @@ function PaymentSettingsContent() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ mpesa, card, ngrok, currency }),
+        body: JSON.stringify({ mpesa, card, ngrok, currency, timezone, dateTimeLocale }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -164,6 +208,8 @@ function PaymentSettingsContent() {
       try {
         localStorage.setItem('app-currency-settings', JSON.stringify(currency));
         window.dispatchEvent(new Event('currency-changed'));
+        localStorage.setItem('app-timezone-settings', JSON.stringify({ ...timezone, dateTimeLocale }));
+        window.dispatchEvent(new Event('timezone-changed'));
       } catch {
         /* ignore */
       }
@@ -299,6 +345,74 @@ function PaymentSettingsContent() {
                 </option>
               ))}
             </select>
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white/90 shadow-sm p-5 space-y-4">
+        <h2 className="text-lg font-medium">Timezone</h2>
+        <p className="text-xs text-gray-500">
+          Date/time display mode for all users. Client machines follow the timezone chosen on the server.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Timezone mode</span>
+            <select
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={timezone.mode || 'auto'}
+              onChange={(e) => setTimezone((t) => ({ ...t, mode: e.target.value === 'manual' ? 'manual' : 'auto' }))}
+            >
+              <option value="auto">Automatic (server machine timezone)</option>
+              <option value="manual">Manual selection</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-gray-700">Detected server timezone</span>
+            <input
+              type="text"
+              readOnly
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+              value={timezone.detected || detectedTimezone}
+            />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="text-sm font-medium text-gray-700">Date/time language (locale)</span>
+            <select
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={dateTimeLocale}
+              onChange={(e) => setDateTimeLocale(e.target.value)}
+            >
+              {LOCALE_OPTIONS.map((opt) => (
+                <option key={opt.locale} value={opt.locale}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="text-sm font-medium text-gray-700">Manual timezone</span>
+            <select
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
+              value={timezone.value || ''}
+              disabled={(timezone.mode || 'auto') !== 'manual'}
+              onChange={(e) => setTimezone((t) => ({ ...t, value: e.target.value }))}
+            >
+              {!timezone.value ? <option value="">Select timezone</option> : null}
+              {timezoneOptions.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block sm:col-span-2">
+            <span className="text-sm font-medium text-gray-700">Current effective timezone</span>
+            <input
+              type="text"
+              readOnly
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
+              value={timezone.effective || timezone.detected || detectedTimezone}
+            />
           </label>
         </div>
       </section>

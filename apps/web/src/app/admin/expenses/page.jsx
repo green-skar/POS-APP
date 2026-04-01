@@ -23,8 +23,10 @@ import { logButtonClick } from '@/utils/logActivity';
 import { usePasswordConfirmation } from '@/utils/usePasswordConfirmation';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { saveFile } from '@/utils/saveFile';
+import { useTimezoneSettings } from '@/utils/timezone';
 
 export default function ExpensesManagement() {
+  const { formatDate } = useTimezoneSettings();
   // Password confirmation hook
   const {
     showPasswordModal,
@@ -560,21 +562,21 @@ export default function ExpensesManagement() {
                         {expense.description && <div className="text-[10px] sm:text-xs text-analytics-secondary hidden sm:block">{expense.description}</div>}
                         <div className="text-[10px] text-analytics-secondary sm:hidden">
                           {expense.category && <span className="glass-card-pro px-1.5 py-0.5 text-[10px] font-medium text-analytics-primary border border-white/30 rounded-full mr-1">{expense.category}</span>}
-                          <span className="text-analytics-secondary">{new Date(expense.date).toLocaleDateString()}</span>
+                          <span className="text-analytics-secondary">{formatDate(expense.date)}</span>
                         </div>
                         </td>
                       <td className="px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-3 md:py-4 whitespace-nowrap hidden sm:table-cell">
                         <span className="glass-card-pro px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium text-analytics-primary border border-white/30 rounded-full">{expense.category}</span>
                         </td>
                       <td className="px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-3 md:py-4 whitespace-nowrap text-xs sm:text-sm font-medium text-analytics-expense">${parseFloat(expense.amount).toFixed(2)}</td>
-                      <td className="px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-3 md:py-4 whitespace-nowrap text-xs sm:text-sm text-analytics-secondary hidden md:table-cell">{new Date(expense.date).toLocaleDateString()}</td>
+                      <td className="px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-3 md:py-4 whitespace-nowrap text-xs sm:text-sm text-analytics-secondary hidden md:table-cell">{formatDate(expense.date)}</td>
                       <td className="px-2 sm:px-3 md:px-4 lg:px-6 py-2 sm:py-3 md:py-4 whitespace-nowrap text-xs sm:text-sm text-analytics-secondary hidden lg:table-cell">
                         {expense.period_start && expense.period_end ? (
                           <span>
-                            {new Date(expense.period_start).toLocaleDateString()} - {new Date(expense.period_end).toLocaleDateString()}
+                            {formatDate(expense.period_start)} - {formatDate(expense.period_end)}
                           </span>
                         ) : expense.period_start ? (
-                          <span>From {new Date(expense.period_start).toLocaleDateString()}</span>
+                          <span>From {formatDate(expense.period_start)}</span>
                         ) : (
                           <span className="text-analytics-expense">Not set</span>
                         )}
@@ -991,13 +993,13 @@ export default function ExpensesManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-analytics-secondary mb-1">Date</label>
-                    <p className="text-base text-analytics-primary">{new Date(selectedExpense.date).toLocaleDateString()}</p>
+                    <p className="text-base text-analytics-primary">{formatDate(selectedExpense.date)}</p>
                   </div>
                   {selectedExpense.period_start && (
                     <div>
                       <label className="block text-sm font-medium text-analytics-secondary mb-1">Period</label>
                       <p className="text-base text-analytics-primary">
-                        {new Date(selectedExpense.period_start).toLocaleDateString()} - {selectedExpense.period_end ? new Date(selectedExpense.period_end).toLocaleDateString() : 'N/A'}
+                        {formatDate(selectedExpense.period_start)} - {selectedExpense.period_end ? formatDate(selectedExpense.period_end) : 'N/A'}
                       </p>
                     </div>
                   )}

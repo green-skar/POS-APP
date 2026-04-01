@@ -901,6 +901,26 @@ export function Layout({ children }: { children: ReactNode }) {
     }
   }, [pathname]);
 
+  // Keep timezone preference synced from server so all clients follow server timezone policy.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await apiFetch('/api/settings/timezone', { method: 'GET', credentials: 'omit' });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (!data || cancelled) return;
+        localStorage.setItem('app-timezone-settings', JSON.stringify(data));
+        window.dispatchEvent(new Event('timezone-changed'));
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Note: Session verification is now handled by useAuth hook
   // No need to duplicate session checking here
 

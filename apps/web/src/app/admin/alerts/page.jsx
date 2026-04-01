@@ -14,7 +14,9 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
+import { useTimezoneSettings } from '@/utils/timezone';
 export default function AlertsManagement() {
+  const { formatDateTime } = useTimezoneSettings();
   const [showReadAlerts, setShowReadAlerts] = useState(false);
   const queryClient = useQueryClient();
   
@@ -241,7 +243,7 @@ export default function AlertsManagement() {
                         <div className="flex items-center space-x-4 text-xs text-analytics-secondary">
                           <span>Current stock: {alert.stock_quantity}</span>
                           <span>Minimum level: {alert.min_stock_level}</span>
-                          <span>{new Date(alert.created_at).toLocaleString()}</span>
+                          <span>{formatDateTime(alert.created_at)}</span>
                         </div>
                       </div>
                     </div>

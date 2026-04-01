@@ -27,9 +27,11 @@ import { usePasswordConfirmation } from '@/utils/usePasswordConfirmation';
 import { saveFile } from '@/utils/saveFile';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { useCurrencySettings } from '@/utils/currency';
+import { useTimezoneSettings } from '@/utils/timezone';
 
 export default function SalesManagement() {
   const { formatMoney } = useCurrencySettings();
+  const { formatDateTime, formatDate } = useTimezoneSettings();
   // Password confirmation hook
   const {
     showPasswordModal,
@@ -296,7 +298,7 @@ export default function SalesManagement() {
         sale.item_count || 0,
         sale.payment_method,
         sale.payment_status,
-        new Date(sale.created_at).toLocaleString(),
+        formatDateTime(sale.created_at),
         sale.mpesa_transaction_id || ''
       ]);
 
@@ -454,7 +456,7 @@ export default function SalesManagement() {
                         <div className="flex items-center space-x-3">
                           <div>
                             <p className="text-sm font-semibold text-analytics-primary">Sale #{sale.id}</p>
-                            <p className="text-xs text-analytics-secondary">{new Date(sale.created_at).toLocaleString()}</p>
+                            <p className="text-xs text-analytics-secondary">{formatDateTime(sale.created_at)}</p>
                             {sale.created_by_full_name || sale.created_by_username ? (
                               <p className="text-xs text-analytics-secondary mt-0.5">
                                 By: {sale.created_by_full_name || sale.created_by_username}
@@ -505,7 +507,7 @@ export default function SalesManagement() {
                   <div className="border-b border-white/10 pb-4">
                     <h3 className="font-semibold text-analytics-primary mb-2">Sale #{saleDetails.id}</h3>
                     <div className="space-y-1 text-sm">
-                      <p className="text-analytics-secondary">Date: {new Date(saleDetails.created_at).toLocaleString()}</p>
+                      <p className="text-analytics-secondary">Date: {formatDateTime(saleDetails.created_at)}</p>
                       {(saleDetails.created_by_full_name || saleDetails.created_by_username) && (
                         <p className="text-analytics-secondary">
                           Created by: {saleDetails.created_by_full_name || saleDetails.created_by_username}
@@ -618,7 +620,7 @@ export default function SalesManagement() {
                                 {formatMoney(parseFloat(returnItem.return_amount || 0))}
                               </p>
                               <p className="text-[10px] text-analytics-secondary">
-                                {new Date(returnItem.return_date).toLocaleDateString()}
+                                {formatDate(returnItem.return_date)}
                               </p>
                             </div>
                           </div>

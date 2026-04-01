@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Dreamnet Media Tech",
-  "version": "0.1.151",
+  "version": "0.1.17",
   "identifier": "com.dreamnet.media.tech",
   "build": {
     "frontendDist": "./tauri-fallback",

@@ -32,9 +32,12 @@ import { useNavigate } from "react-router-dom";
 import { logButtonClick } from "@/utils/logActivity";
 import { createPortal } from "react-dom";
 import { useCurrencySettings } from "@/utils/currency";
+import { useTimezoneSettings } from "@/utils/timezone";
 import AppFooter from "@/components/AppFooter";
 
 const POS_PARKED_KEY = "POS_PARKED_CARTS";
+const POS_RECEIPT_PRINTER_KEY = "POS_RECEIPT_PRINTER";
+const POS_RECEIPT_PRINTER_CACHE_KEY = "POS_RECEIPT_PRINTERS_CACHE";
 const MAX_PARKED_CARTS = 25;
 /** User parked manually (wait list) */
 const PARK_STATUS_PAUSED = "paused";
@@ -146,8 +149,23 @@ export default function POSSystem() {
   const printingTypeDropdownRef = useRef(null);
   const [receiptPrompt, setReceiptPrompt] = useState(null);
   const [showReceiptPrintModal, setShowReceiptPrintModal] = useState(false);
-  const [availablePrinters, setAvailablePrinters] = useState([]);
-  const [selectedPrinter, setSelectedPrinter] = useState("");
+  const [availablePrinters, setAvailablePrinters] = useState(() => {
+    try {
+      const raw = localStorage.getItem(POS_RECEIPT_PRINTER_CACHE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedPrinter, setSelectedPrinter] = useState(() => {
+    try {
+      return localStorage.getItem(POS_RECEIPT_PRINTER_KEY) || "";
+    } catch {
+      return "";
+    }
+  });
+  const { formatDateTime } = useTimezoneSettings();
   const [loadingPrinters, setLoadingPrinters] = useState(false);
   const [findingLanPrinters, setFindingLanPrinters] = useState(false);
   const [printingReceipt, setPrintingReceipt] = useState(false);
@@ -203,6 +221,48 @@ export default function POSSystem() {
 
   useEffect(() => {
     setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (availablePrinters.length > 0) return;
+    void (async () => {
+      const local = await getLocalPrinters();
+      if (local.length > 0) {
+        setAvailablePrinters(local);
+        try {
+          localStorage.setItem(POS_RECEIPT_PRINTER_CACHE_KEY, JSON.stringify(local));
+        } catch {
+          /* ignore */
+        }
+        setSelectedPrinter((prev) => prev || local[0]?.name || "");
+      }
+    })();
+  }, [availablePrinters.length]);
+
+  useEffect(() => {
+    // Warm LAN printer cache in the background after launch (non-blocking).
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const lan = await getLanPrinters();
+        if (cancelled || !lan.length) return;
+        setAvailablePrinters((prev) => {
+          const map = new Map();
+          [...prev, ...lan].forEach((p) => map.set(p.name, p));
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem(POS_RECEIPT_PRINTER_CACHE_KEY, JSON.stringify(merged));
+          } catch {
+            /* ignore */
+          }
+          return merged;
+        });
+      })();
+    }, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -432,8 +492,8 @@ export default function POSSystem() {
       const label =
         meta.label ||
         (pm
-          ? `Failed ${pm}${meta.pendingSaleId ? ` · Sale #${meta.pendingSaleId}` : ""} · ${new Date().toLocaleString()}`
-          : `Failed payment · ${new Date().toLocaleString()}`);
+          ? `Failed ${pm}${meta.pendingSaleId ? ` · Sale #${meta.pendingSaleId}` : ""} · ${formatDateTime(new Date())}`
+          : `Failed payment · ${formatDateTime(new Date())}`);
       setParkedCarts((prev) => [
         ...prev,
         {
@@ -466,7 +526,7 @@ export default function POSSystem() {
       const sid = meta.saleId;
       const label =
         meta.label ||
-        `M-Pesa pending · Sale #${sid} · ${new Date().toLocaleString()}`;
+        `M-Pesa pending · Sale #${sid} · ${formatDateTime(new Date())}`;
       setParkedCarts((prev) => [
         ...prev,
         {
@@ -505,7 +565,7 @@ export default function POSSystem() {
       ...prev,
       {
         id: newParkedId(),
-        label: `Cart ${new Date().toLocaleString()}`,
+        label: `Cart ${formatDateTime(new Date())}`,
         items: snapshot,
         createdAt: Date.now(),
         status: PARK_STATUS_PAUSED,
@@ -577,7 +637,7 @@ export default function POSSystem() {
           ...prev,
           {
             id: newParkedId(),
-            label: `Cart ${new Date().toLocaleString()}`,
+            label: `Cart ${formatDateTime(new Date())}`,
             items: snapshot,
             createdAt: Date.now(),
             status: PARK_STATUS_PAUSED,
@@ -640,7 +700,7 @@ export default function POSSystem() {
           ...prev,
           {
             id: newParkedId(),
-            label: `Cart ${new Date().toLocaleString()}`,
+            label: `Cart ${formatDateTime(new Date())}`,
             items: snapshot,
             createdAt: Date.now(),
             status: PARK_STATUS_PAUSED,
@@ -1235,7 +1295,7 @@ export default function POSSystem() {
         "DREAMNET POS RECEIPT",
         "------------------------------",
         `Sale #: ${receipt.saleId ?? "-"}`,
-        `Date: ${now.toLocaleString()}`,
+        `Date: ${formatDateTime(now)}`,
         `Cashier: ${user?.fullName || user?.username || "Staff"}`,
         `Store: ${store?.name || "Main Store"}`,
         `Payment: ${receipt.paymentMethod || "-"}`,
@@ -1253,21 +1313,49 @@ export default function POSSystem() {
       lines.push("Thank you for your purchase.");
       return lines.join("\n");
     },
-    [formatMoney, store?.name, user?.fullName, user?.username]
+    [formatDateTime, formatMoney, store?.name, user?.fullName, user?.username]
   );
 
-  const openPrinterSelection = useCallback(async () => {
-    setLoadingPrinters(true);
-    setReceiptPrintError("");
+  const persistPrinterPreference = useCallback((name) => {
     try {
-      const local = await getLocalPrinters();
+      if (name) localStorage.setItem(POS_RECEIPT_PRINTER_KEY, name);
+      else localStorage.removeItem(POS_RECEIPT_PRINTER_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persistPrinterCache = useCallback((printers) => {
+    try {
+      localStorage.setItem(POS_RECEIPT_PRINTER_CACHE_KEY, JSON.stringify(Array.isArray(printers) ? printers : []));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const refreshLocalPrinters = useCallback(async () => {
+    const local = await getLocalPrinters();
+    if (local.length > 0) {
       setAvailablePrinters(local);
-      setSelectedPrinter(local[0]?.name || "");
-      setShowReceiptPrintModal(true);
+      persistPrinterCache(local);
+      setSelectedPrinter((prev) => prev || local[0]?.name || "");
+    }
+    return local;
+  }, [persistPrinterCache]);
+
+  const openPrinterSelection = useCallback(async () => {
+    setReceiptPrintError("");
+    setShowReceiptPrintModal(true);
+    if (availablePrinters.length > 0) {
+      return;
+    }
+    setLoadingPrinters(true);
+    try {
+      await refreshLocalPrinters();
     } finally {
       setLoadingPrinters(false);
     }
-  }, []);
+  }, [availablePrinters.length, refreshLocalPrinters]);
 
   const findLanPrinters = useCallback(async () => {
     setFindingLanPrinters(true);
@@ -1277,13 +1365,15 @@ export default function POSSystem() {
       setAvailablePrinters((prev) => {
         const map = new Map();
         [...prev, ...lan].forEach((p) => map.set(p.name, p));
-        return Array.from(map.values());
+        const merged = Array.from(map.values());
+        persistPrinterCache(merged);
+        return merged;
       });
       if (!selectedPrinter && lan[0]?.name) setSelectedPrinter(lan[0].name);
     } finally {
       setFindingLanPrinters(false);
     }
-  }, [selectedPrinter]);
+  }, [persistPrinterCache, selectedPrinter]);
 
   const runReceiptPrint = useCallback(async () => {
     if (!receiptPrompt) return;
@@ -1296,6 +1386,7 @@ export default function POSSystem() {
     try {
       const receiptText = formatReceiptText(receiptPrompt);
       await printReceiptToPrinter(selectedPrinter, receiptText);
+      persistPrinterPreference(selectedPrinter);
       toast.success("Receipt sent to printer", {
         description: `${selectedPrinter}`,
       });
@@ -1309,7 +1400,28 @@ export default function POSSystem() {
     } finally {
       setPrintingReceipt(false);
     }
-  }, [formatReceiptText, receiptPrompt, selectedPrinter]);
+  }, [formatReceiptText, persistPrinterPreference, receiptPrompt, selectedPrinter]);
+
+  const printWithSavedPrinter = useCallback(async () => {
+    if (!receiptPrompt || !selectedPrinter) return;
+    setPrintingReceipt(true);
+    setReceiptPrintError("");
+    try {
+      const receiptText = formatReceiptText(receiptPrompt);
+      await printReceiptToPrinter(selectedPrinter, receiptText);
+      persistPrinterPreference(selectedPrinter);
+      toast.success("Receipt sent to printer", { description: `${selectedPrinter}` });
+      setReceiptPrompt(null);
+    } catch (err) {
+      setReceiptPrintError(err?.message || "Printing failed. Check printer and try again.");
+      toast.error("Printing failed", {
+        description: err?.message || "Open printer selection to retry or change printer.",
+      });
+      setShowReceiptPrintModal(true);
+    } finally {
+      setPrintingReceipt(false);
+    }
+  }, [formatReceiptText, persistPrinterPreference, receiptPrompt, selectedPrinter]);
 
   const handlePayment = useCallback(async () => {
     if (cart.length === 0) {
@@ -1400,7 +1512,7 @@ export default function POSSystem() {
             paymentMethod: "mpesa",
             phoneNumber: phoneNum,
             lastError: err.message,
-            label: `M-Pesa · sale not created · ${new Date().toLocaleString()}`,
+            label: `M-Pesa · sale not created · ${formatDateTime(new Date())}`,
           });
           if (saved) {
             setCart([]);
@@ -1424,7 +1536,7 @@ export default function POSSystem() {
             phoneNumber: phoneNum,
             lastError: err.message,
             pendingSaleId: sale.id,
-            label: `M-Pesa failed · Sale #${sale.id} · ${new Date().toLocaleString()}`,
+            label: `M-Pesa failed · Sale #${sale.id} · ${formatDateTime(new Date())}`,
           });
           if (saved) {
             setCart([]);
@@ -1442,7 +1554,7 @@ export default function POSSystem() {
           checkoutRequestId: stkResult?.checkoutRequestID,
           phoneNumber: phoneNum,
           total,
-          label: `M-Pesa awaiting · Sale #${sale.id} · ${new Date().toLocaleString()}`,
+          label: `M-Pesa awaiting · Sale #${sale.id} · ${formatDateTime(new Date())}`,
         });
         if (savedAwait) {
           setCart([]);
@@ -1500,7 +1612,7 @@ export default function POSSystem() {
         const saved = parkCartAfterFailure(snapshot, {
           paymentMethod,
           lastError: err.message,
-          label: `${paymentMethod} failed · ${new Date().toLocaleString()}`,
+          label: `${paymentMethod} failed · ${formatDateTime(new Date())}`,
         });
         if (saved) {
           setCart([]);
@@ -2589,7 +2701,7 @@ export default function POSSystem() {
                               </div>
                               <p className="text-xs text-analytics-secondary">
                                 {p.items?.length ?? 0} line(s) · {formatMoney(sumParkedItems(p.items))} ·{" "}
-                                {new Date(p.createdAt).toLocaleString()}
+                                {formatDateTime(new Date(p.createdAt))}
                                 {p.pendingSaleId ? ` · Sale #${p.pendingSaleId}` : ""}
                                 {p.phoneNumber ? ` · ${p.phoneNumber}` : ""}
                               </p>
@@ -2854,6 +2966,11 @@ export default function POSSystem() {
               <p className="text-sm text-analytics-secondary mb-4">
                 Transaction #{receiptPrompt.saleId} is complete. You can print a receipt now or continue without printing.
               </p>
+              {selectedPrinter ? (
+                <p className="text-xs text-analytics-secondary mb-3">
+                  Saved printer: <span className="text-primary-pos">{selectedPrinter}</span>
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2 justify-end">
                 <button
                   type="button"
@@ -2862,13 +2979,23 @@ export default function POSSystem() {
                 >
                   Continue without printing
                 </button>
+                {selectedPrinter ? (
+                  <button
+                    type="button"
+                    className="glass-button-primary px-4 py-2 rounded-lg text-sm"
+                    onClick={() => void printWithSavedPrinter()}
+                    disabled={printingReceipt}
+                  >
+                    {printingReceipt ? "Printing..." : `Print on ${selectedPrinter}`}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="glass-button-primary px-4 py-2 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-700"
                   onClick={() => void openPrinterSelection()}
                   disabled={loadingPrinters}
                 >
-                  {loadingPrinters ? "Loading printers..." : "Choose printer"}
+                  {loadingPrinters ? "Loading printers..." : selectedPrinter ? "Change printer" : "Choose printer"}
                 </button>
               </div>
             </div>
@@ -2886,14 +3013,14 @@ export default function POSSystem() {
             }}
           >
             <div
-              className="glass-card-pro max-w-lg w-full p-6 shadow-2xl"
+              className="glass-card-pro w-full max-w-2xl p-4 sm:p-6 shadow-2xl max-h-[88vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <h3 className="text-lg font-bold heading-pos mb-2">Print receipt</h3>
               <p className="text-sm text-analytics-secondary mb-3">
-                Select a printer connected to this machine. You can also find network printers on the LAN.
+                Choose a saved/local printer first, or find network printers only if needed.
               </p>
-              <div className="space-y-2 max-h-52 overflow-auto rounded-lg border border-white/20 p-2 bg-white/5">
+              <div className="space-y-2 max-h-56 sm:max-h-64 overflow-auto rounded-lg border border-white/20 p-2 bg-white/5">
                 {availablePrinters.length === 0 ? (
                   <p className="text-xs text-analytics-secondary">No printers found yet.</p>
                 ) : (
@@ -2910,7 +3037,10 @@ export default function POSSystem() {
                         type="radio"
                         name="receipt-printer"
                         checked={selectedPrinter === p.name}
-                        onChange={() => setSelectedPrinter(p.name)}
+                        onChange={() => {
+                          setSelectedPrinter(p.name);
+                          persistPrinterPreference(p.name);
+                        }}
                       />
                     </label>
                   ))
@@ -2919,10 +3049,18 @@ export default function POSSystem() {
               {receiptPrintError ? (
                 <p className="mt-2 text-xs text-red-600">{receiptPrintError}</p>
               ) : null}
-              <div className="mt-4 flex flex-wrap gap-2 justify-end">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className="glass-button-secondary px-3 py-2 rounded-lg text-sm"
+                  className="glass-button-secondary px-3 py-2 rounded-lg text-sm w-full"
+                  onClick={() => void refreshLocalPrinters()}
+                  disabled={loadingPrinters}
+                >
+                  {loadingPrinters ? "Refreshing..." : "Refresh local printers"}
+                </button>
+                <button
+                  type="button"
+                  className="glass-button-secondary px-3 py-2 rounded-lg text-sm w-full"
                   onClick={() => void findLanPrinters()}
                   disabled={findingLanPrinters}
                 >
@@ -2930,7 +3068,7 @@ export default function POSSystem() {
                 </button>
                 <button
                   type="button"
-                  className="glass-button-secondary px-3 py-2 rounded-lg text-sm"
+                  className="glass-button-secondary px-3 py-2 rounded-lg text-sm w-full"
                   onClick={() => {
                     setShowReceiptPrintModal(false);
                     setReceiptPrompt(null);
@@ -2940,7 +3078,7 @@ export default function POSSystem() {
                 </button>
                 <button
                   type="button"
-                  className="glass-button-primary px-3 py-2 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-700"
+                  className="glass-button-primary px-3 py-2 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-700 w-full"
                   onClick={() => void runReceiptPrint()}
                   disabled={printingReceipt || !selectedPrinter}
                 >
@@ -2949,7 +3087,7 @@ export default function POSSystem() {
                 {receiptPrintError ? (
                   <button
                     type="button"
-                    className="glass-button-primary px-3 py-2 rounded-lg text-sm"
+                    className="glass-button-primary px-3 py-2 rounded-lg text-sm w-full sm:col-span-2"
                     onClick={() => void runReceiptPrint()}
                     disabled={printingReceipt || !selectedPrinter}
                   >

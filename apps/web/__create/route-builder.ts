@@ -18,13 +18,29 @@ import {
   setMpesaEnvResolver,
 } from '../src/app/api/utils/daraja.js';
 
-const dbPath = resolvePosDatabasePath();
-const db = new Database(dbPath);
+let dbInstance: Database.Database | null = null;
 
-// Enable foreign keys
-db.pragma('foreign_keys = ON');
+function getDb(): Database.Database {
+  if (dbInstance) return dbInstance;
+  const dbPath = resolvePosDatabasePath();
+  const db = new Database(dbPath);
+  // Enable foreign keys once on the shared connection.
+  db.pragma('foreign_keys = ON');
+  applyDatabaseSchema(db);
+  dbInstance = db;
+  return db;
+}
 
-applyDatabaseSchema(db);
+const db = new Proxy({} as Database.Database, {
+  get(_target, prop, receiver) {
+    const realDb = getDb() as unknown as Record<PropertyKey, unknown>;
+    const value = Reflect.get(realDb, prop, receiver);
+    if (typeof value === 'function') {
+      return (value as (...args: unknown[]) => unknown).bind(realDb);
+    }
+    return value;
+  },
+});
 
 /** Writable theme uploads: app data dir when set, else dev public folder. */
 function resolveThemeBackgroundsDir(): string {
@@ -161,6 +177,11 @@ type PaymentConfigFile = {
     code?: string;
     locale?: string;
   };
+  timezone?: {
+    mode?: 'auto' | 'manual';
+    value?: string;
+  };
+  dateTimeLocale?: string;
 };
 
 function getPaymentConfigFromDb(): PaymentConfigFile {
@@ -1840,12 +1861,23 @@ api.get('/admin/payment-settings', async (c) => {
       autoApplyCallback: Boolean(sn.autoApplyCallback),
       tunnelPort: Number(sn.tunnelPort) > 0 ? Number(sn.tunnelPort) : 4000,
     };
+    const timezoneMode = (stored.timezone?.mode === 'manual' ? 'manual' : 'auto') as 'auto' | 'manual';
+    const machineTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const timezoneValue = String(stored.timezone?.value || machineTimezone);
+    const dateTimeLocale = String(stored.dateTimeLocale || 'en-US');
+    const timezone = {
+      mode: timezoneMode,
+      value: timezoneValue,
+      effective: timezoneMode === 'manual' ? timezoneValue : machineTimezone,
+      detected: machineTimezone,
+      dateTimeLocale,
+    };
     const currency = {
       code: String(cur.code || 'USD').toUpperCase(),
       locale: String(cur.locale || 'en-US'),
     };
 
-    return c.json({ mpesa, card, ngrok, currency });
+    return c.json({ mpesa, card, ngrok, currency, timezone });
   } catch (error) {
     console.error('GET /api/admin/payment-settings:', error);
     return c.json({ error: 'Failed to load payment settings' }, 500);
@@ -1868,8 +1900,23 @@ api.put('/admin/payment-settings', async (c) => {
     const cardIn = body.card || {};
     const ngrokIn = body.ngrok || {};
     const currencyIn = body.currency || {};
+    const timezoneIn = body.timezone || {};
     const currencyCode = String(currencyIn.code || 'USD').trim().toUpperCase() || 'USD';
     const currencyLocale = String(currencyIn.locale || 'en-US').trim() || 'en-US';
+    const timezoneMode = timezoneIn.mode === 'manual' ? 'manual' : 'auto';
+    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const dateTimeLocale = String(body.dateTimeLocale || 'en-US').trim() || 'en-US';
+    const timezoneValueRaw = String(timezoneIn.value || detectedTimezone).trim();
+    let timezoneValue = detectedTimezone;
+    if (timezoneMode === 'manual') {
+      try {
+        // Validate manual timezone by attempting format construction
+        new Intl.DateTimeFormat('en-US', { timeZone: timezoneValueRaw });
+        timezoneValue = timezoneValueRaw;
+      } catch {
+        timezoneValue = detectedTimezone;
+      }
+    }
 
     const next: PaymentConfigFile = {
       mpesa: {
@@ -1894,6 +1941,11 @@ api.put('/admin/payment-settings', async (c) => {
         code: currencyCode,
         locale: currencyLocale,
       },
+      timezone: {
+        mode: timezoneMode,
+        value: timezoneValue,
+      },
+      dateTimeLocale,
     };
 
     ensureAppSettingsTable();
@@ -1921,6 +1973,24 @@ api.get('/settings/currency', async (c) => {
   } catch (error) {
     console.error('GET /api/settings/currency:', error);
     return c.json({ code: 'USD', locale: 'en-US' });
+  }
+});
+
+/** Public timezone preference used by POS + dashboards (clients follow server timezone). */
+api.get('/settings/timezone', async (c) => {
+  try {
+    const stored = getPaymentConfigFromDb();
+    const tz = stored.timezone || {};
+    const mode = tz.mode === 'manual' ? 'manual' : 'auto';
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const value = String(tz.value || detected);
+    const effective = mode === 'manual' ? value : detected;
+    const dateTimeLocale = String(stored.dateTimeLocale || 'en-US');
+    return c.json({ mode, value, effective, detected, dateTimeLocale });
+  } catch (error) {
+    console.error('GET /api/settings/timezone:', error);
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return c.json({ mode: 'auto', value: detected, effective: detected, detected, dateTimeLocale: 'en-US' });
   }
 });
 
@@ -4437,7 +4507,6 @@ api.get('/auth/users', async (c) => {
           ORDER BY u.created_at DESC
         `).all() as any[];
         
-        console.log('[API] Super admin - Found users with login credentials:', users.length);
       } else {
         // Admin can only see users from their store (employees with login credentials - username and password_hash)
         if (!session.storeId) {
@@ -4481,7 +4550,6 @@ api.get('/auth/users', async (c) => {
           };
         });
         
-        console.log('[API] Admin - Found users with login credentials:', users.length);
       }
     } catch (queryError: any) {
       console.error('Query error:', queryError);
@@ -4499,7 +4567,6 @@ api.get('/auth/users', async (c) => {
 
 // Get all employees (all roles except super_admin, filtered by store for admins)
 api.get('/auth/employees', async (c) => {
-  console.log('[API] ===== GET /api/auth/employees called =====');
   try {
     // Get token from cookie header
     const token = c.get('posSessionToken');
@@ -4522,7 +4589,6 @@ api.get('/auth/employees', async (c) => {
     // Filter by store if not super admin
     let employees: any[] = [];
     try {
-      console.log('[API] Session role:', session.role, 'Store ID:', session.storeId, 'Store Name:', session.storeName);
       if (session.role === 'super_admin') {
         // Super admin can see all employees from all stores
         employees = db.prepare(`
@@ -4536,11 +4602,9 @@ api.get('/auth/employees', async (c) => {
           GROUP BY u.id
           ORDER BY u.created_at DESC
         `).all() as any[];
-        console.log('[API] Super admin - Found employees:', employees.length);
       } else {
         // Admin can only see employees from their store (all roles except super_admin)
         if (!session.storeId) {
-          console.log('[API] No storeId in session for admin user');
           return c.json({ error: 'Store ID required for admin users' }, 400);
         }
         
@@ -4557,7 +4621,6 @@ api.get('/auth/employees', async (c) => {
           console.error('[API] Store not found:', storeId);
           return c.json({ error: 'Store not found' }, 404);
         }
-        console.log('[API] Store found:', (store as any).name);
         
         // Get all employees from this store (all roles except super_admin)
         const allEmployees = db.prepare(`
@@ -4567,17 +4630,6 @@ api.get('/auth/employees', async (c) => {
           WHERE us.store_id = ? AND u.role != 'super_admin'
           ORDER BY u.created_at DESC
         `).all(storeId) as any[];
-        
-        console.log('[API] Simple query returned:', allEmployees.length, 'employees');
-        allEmployees.forEach((e: any) => console.log(`[API]   Employee ${e.id}: ${e.username} (${e.role})`));
-        
-        // Count roles in query result
-        const roleCounts: any = {};
-        allEmployees.forEach((e: any) => {
-          roleCounts[e.role] = (roleCounts[e.role] || 0) + 1;
-        });
-        console.log('[API] Role distribution in query result:', roleCounts);
-        
         // Now add store information for each employee
         employees = allEmployees.map((employee: any) => {
           // Get store names and IDs for this employee
@@ -4595,8 +4647,6 @@ api.get('/auth/employees', async (c) => {
           };
         });
         
-        console.log('[API] Admin - Found employees for store', storeId, ':', employees.length);
-        console.log('[API] Admin - Employees:', employees.map((e: any) => `${e.username} (${e.role})`));
       }
     } catch (queryError: any) {
       console.error('[API] Query error:', queryError);
@@ -4608,16 +4658,6 @@ api.get('/auth/employees', async (c) => {
       console.error('[API] ERROR: employees is not an array! Type:', typeof employees);
       employees = [];
     }
-    
-    // Log final role distribution
-    const finalRoleCounts: any = {};
-    employees.forEach((e: any) => {
-      finalRoleCounts[e.role] = (finalRoleCounts[e.role] || 0) + 1;
-    });
-    console.log('[API] Final role distribution:', finalRoleCounts);
-    console.log('[API] Found employees:', employees.length);
-    console.log('[API] ===== END GET /api/auth/employees =====');
-    
     return c.json({ employees: employees || [] });
 
   } catch (error: any) {
@@ -7157,7 +7197,6 @@ api.get('/activity-log', async (c) => {
     // Get query parameter - Hono uses c.req.query() for query params
     const typeParam = c.req.query('type');
     const type = typeParam || 'all';
-    console.log('[Activity Log API] Filter type received:', typeParam, 'Using:', type);
     ensureActivityLogTable();
     ensureActivityLogSettingsTable();
     const retention = getRetentionDays();
@@ -7185,15 +7224,10 @@ api.get('/activity-log', async (c) => {
       query += ` AND (al.is_undone = 0 OR al.is_undone IS NULL)`;
     }
     
-    console.log('[Activity Log API] Query:', query);
 
     query += ` ORDER BY al.performed_at DESC`;
 
     const logs = db.prepare(query).all() as any[];
-    console.log('[Activity Log API] Found logs:', logs.length, 'for type:', type);
-    if (logs.length > 0) {
-      console.log('[Activity Log API] Sample log action_types:', logs.slice(0, 5).map((l: any) => l.action_type));
-    }
 
     // Enrich logs with entity names based on entity_type
     const enrichedLogs = logs.map(log => {

@@ -1,7 +1,7 @@
 /**
  * Best-effort logout when the app window is closing (Tauri, browser tab, etc.).
  */
-import { apiFetch } from '@/utils/apiClient';
+import { apiFetch, apiUrl } from '@/utils/apiClient';
 import { clearSessionCookieClient } from './cookies.js';
 
 function clearClientSessionMarkers() {
@@ -39,17 +39,34 @@ export function logoutOnAppExit() {
  * When the window is still alive (e.g. Tauri `onCloseRequested`): await server logout, then clear client.
  */
 export async function logoutOnAppExitAsync() {
+  let bearer = '';
+  try {
+    bearer = sessionStorage.getItem('POS_SESSION_TOKEN') || '';
+  } catch {
+    /* ignore */
+  }
   try {
     await apiFetch('/api/auth/logout', {
       method: 'POST',
       credentials: 'include',
       keepalive: true,
+      headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
     });
   } catch {
     try {
-      navigator.sendBeacon('/api/auth/logout', new FormData());
+      // Fallback for desktop/window-close edge-cases.
+      await fetch(apiUrl('/api/auth/logout'), {
+        method: 'POST',
+        credentials: 'include',
+        keepalive: true,
+        headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
+      });
     } catch {
-      // ignore
+      try {
+        navigator.sendBeacon(apiUrl('/api/auth/logout'), new FormData());
+      } catch {
+        // ignore
+      }
     }
   }
   clearClientSessionMarkers();

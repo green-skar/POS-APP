@@ -14,6 +14,7 @@ import { logButtonClick } from '@/utils/logActivity';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { usePasswordConfirmation } from '@/utils/usePasswordConfirmation';
 import { saveFile } from '@/utils/saveFile';
+import { useTimezoneSettings } from '@/utils/timezone';
 
 export default function CashiersPage() {
   return (
@@ -24,6 +25,7 @@ export default function CashiersPage() {
 }
 
 function CashiersPageContent() {
+  const { formatDateTime } = useTimezoneSettings();
   const { user: authUser, isAdmin, isSuperAdmin, store } = useAuth();
   const queryClient = useQueryClient();
 
@@ -1633,7 +1635,7 @@ function CashiersPageContent() {
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm text-analytics-primary">{log.action_description}</p>
                                     <p className="text-xs text-analytics-secondary">
-                                      {new Date(log.created_at).toLocaleString()}
+                                      {formatDateTime(log.created_at)}
                                     </p>
                                   </div>
                                 </div>
